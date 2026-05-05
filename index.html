@@ -94,14 +94,75 @@
         </div>
       </div>
 
-      <div id="userContent" class="d-none">
-        <div class="alert alert-success border-0 shadow-sm">
-          <p class="mb-0">Silakan pilih menu ujian yang tersedia di bawah ini untuk memulai.</p>
+<- -------- USER CONTENT ------------- ->
+
+<div id="userContent" class="d-none">
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-body p-4 text-start">
+      <h5 class="fw-bold text-primary mb-3"><i class="bi bi-plus-circle"></i> Buat Bank Soal Baru</h5>
+      <form id="formUjian">
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label small fw-bold">Nama Ujian</label>
+            <input type="text" name="namaUjian" class="form-control" placeholder="Contoh: UTS Ganjil 2024" required>
+          </div>
+          <div class="col-md-3 mb-3">
+            <label class="form-label small fw-bold">Semester</label>
+            <select name="semester" class="form-select">
+              <option value="Ganjil">Ganjil</option>
+              <option value="Genap">Genap</option>
+            </select>
+          </div>
+          <div class="col-md-3 mb-3">
+            <label class="form-label small fw-bold">Kelas</label>
+            <input type="text" name="kelas" class="form-control" placeholder="X / XI / XII" required>
+          </div>
         </div>
-        <div class="py-5">
-          <h4 class="text-muted small text-uppercase">-- Belum ada ujian aktif --</h4>
+
+        <div class="mb-3">
+          <label class="form-label small fw-bold">Mata Pelajaran</label>
+          <input type="text" name="mapel" class="form-control" placeholder="Contoh: Matematika" required>
         </div>
-      </div>
+
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label small fw-bold text-success">Upload Soal Pilihan Ganda (.docx)</label>
+            <input type="file" name="filePG" class="form-control" accept=".docx" required>
+          </div>
+          <div class="col-md-6 mb-3">
+            <label class="form-label small fw-bold text-info">Upload Soal Essay (.docx)</label>
+            <input type="file" name="fileEssay" class="form-control" accept=".docx" required>
+          </div>
+        </div>
+
+        <button type="button" class="btn btn-primary w-100 fw-bold py-2" onclick="processUpload()" id="btnUpload">
+          <span id="uploadSpinner" class="spinner-border spinner-border-sm d-none"></span> Simpan & Upload Bank Soal
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="text-start mb-2 d-flex justify-content-between align-items-center">
+    <h6 class="fw-bold mb-0">10 Data Terakhir Anda</h6>
+    <button class="btn btn-sm btn-link text-decoration-none" onclick="loadTeacherData()">🔄 Refresh</button>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover bg-white rounded border small">
+      <thead class="table-light">
+        <tr>
+          <th>Tanggal</th>
+          <th>Nama Ujian</th>
+          <th>Mapel</th>
+          <th>File PG</th>
+          <th>File Essay</th>
+        </tr>
+      </thead>
+      <tbody id="teacherTableBody">
+        <tr><td colspan="5" class="text-center">Memuat data...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
 
     </div>
   </div>
@@ -173,18 +234,31 @@
 
       // --- Tampilan Setelah Login ---
       function showDashboard(data) {
-        document.getElementById('loginPage').classList.add('d-none');
-        document.getElementById('registerPage').classList.add('d-none');
-        document.getElementById('dashboardPage').classList.remove('d-none');
-        
-        document.getElementById('userNameDisplay').innerText = data.nama;
-        document.getElementById('welcomeMessage').innerText = `Halo, ${data.nama}!`;
-        
-        // Cek Role
-        if(data.role === "admin") {
-          document.getElementById('adminContent').classList.remove('d-none');
-        } else {
-          document.getElementById('userContent').classList.remove('d-none');
+        try {
+          document.getElementById('loginPage').classList.add('d-none');
+          document.getElementById('registerPage').classList.add('d-none');
+          document.getElementById('dashboardPage').classList.remove('d-none');
+          
+          document.getElementById('userNameDisplay').innerText = data.nama || "User";
+          document.getElementById('welcomeMessage').innerText = `Halo, ${data.nama || "User"}!`;
+          
+          // --- BAGIAN INI YANG PERLU DISESUAIKAN ---
+          if (data.role === "admin") {
+            const adminDiv = document.getElementById('adminContent');
+            if (adminDiv) {
+              adminDiv.classList.remove('d-none');
+              loadPendingUsers(); // Admin load data user pending
+            }
+          } else {
+            const userDiv = document.getElementById('userContent');
+            if (userDiv) {
+              userDiv.classList.remove('d-none');
+              loadTeacherData(); // GURU LOAD DATA UJIAN MEREKA SENDIRI (Langkah ini yang dimaksud)
+            }
+          }
+        } catch (err) {
+          console.error("Error di showDashboard:", err);
+          alert("Terjadi kesalahan saat memuat dashboard: " + err.message);
         }
       }
 
@@ -303,6 +377,111 @@
           }
         }).getSpreadsheetUrl();
       }
+
+      //------------ BAGIAN HALAMAN GURU ----------
+// --- FUNGSI PROSES UPLOAD ---
+function processUpload() {
+  const form = document.getElementById('formUjian');
+  const btn = document.getElementById('btnUpload');
+  const spinner = document.getElementById('uploadSpinner');
+  
+  // Validasi sederhana
+  if (!form.namaUjian.value || !form.filePG.files[0]) {
+    return alert("Mohon lengkapi Nama Ujian dan file Pilihan Ganda!");
+  }
+
+  btn.disabled = true;
+  spinner.classList.remove('d-none');
+
+  // Ambil email dari tampilan dashboard (yang sudah login)
+  const currentEmail = document.getElementById('userNameDisplay').innerText.toLowerCase();
+
+  // Membaca file sebagai format yang bisa dikirim ke server
+  const filePG = form.filePG.files[0];
+  const fileEssay = form.fileEssay.files[0];
+
+  const readerPG = new FileReader();
+  readerPG.onload = function(e) {
+    const dataPG = {
+      nama: filePG.name,
+      mimeType: filePG.type,
+      contents: btoa(e.target.result)
+    };
+
+    // Jika ada file essay, baca juga
+    if (fileEssay) {
+      const readerEssay = new FileReader();
+      readerEssay.onload = function(e2) {
+        const dataEssay = {
+          nama: fileEssay.name,
+          mimeType: fileEssay.type,
+          contents: btoa(e2.target.result)
+        };
+        sendToServer(form, currentEmail, dataPG, dataEssay);
+      };
+      readerEssay.readAsBinaryString(fileEssay);
+    } else {
+      sendToServer(form, currentEmail, dataPG, null);
+    }
+  };
+  readerPG.readAsBinaryString(filePG);
+}
+
+function sendToServer(form, email, filePGData, fileEssayData) {
+  const payload = {
+    userEmail: email,
+    namaUjian: form.namaUjian.value,
+    semester: form.semester.value,
+    kelas: form.kelas.value,
+    mapel: form.mapel.value,
+    filePG: filePGData,
+    fileEssay: fileEssayData
+  };
+
+  google.script.run.withSuccessHandler(function(res) {
+    document.getElementById('btnUpload').disabled = false;
+    document.getElementById('uploadSpinner').classList.add('d-none');
+    
+    if(res.success) {
+      alert(res.message);
+      form.reset();
+      loadTeacherData(); // Refresh tabel setelah upload
+    } else {
+      alert("Error: " + res.message);
+    }
+  }).uploadUjianData(payload);
+}
+
+// --- FUNGSI LOAD DATA TABEL GURU ---
+function loadTeacherData() {
+  const email = document.getElementById('userNameDisplay').innerText.toLowerCase();
+  const tbody = document.getElementById('teacherTableBody');
+
+  google.script.run.withSuccessHandler(function(data) {
+    tbody.innerHTML = "";
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Belum ada data.</td></tr>';
+      return;
+    }
+
+    data.forEach(item => {
+      tbody.innerHTML += `
+        <tr>
+          <td>${item.timestamp}</td>
+          <td class="fw-bold">${item.namaUjian}</td>
+          <td>${item.mapel}</td>
+          <td><a href="${item.linkPG}" target="_blank" class="btn btn-xs btn-outline-success py-0 px-1">Lihat PG</a></td>
+          <td>${item.linkEssay ? `<a href="${item.linkEssay}" target="_blank" class="btn btn-xs btn-outline-info py-0 px-1">Lihat Essay</a>` : '-'}</td>
+        </tr>
+      `;
+    });
+  }).getTeacherRecentData(email);
+}
+
+// Pastikan fungsi ini dipanggil saat login sukses (User)
+// Tambahkan loadTeacherData() di dalam fungsi showDashboard(data) bagian ELSE (user)
+
+
     </script>
   </body>
 </html>

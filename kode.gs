@@ -139,3 +139,140 @@ function getSpreadsheetUrl() {
     return null;
   }
 }
+
+
+/**
+ * Dashboard GURU - MENU UPLOAD BANK SOAL
+ */
+
+// --- KONFIGURASI TAMBAHAN ---
+const SHEET_DATA_UJIAN = "DATA_UJIAN"; // Nama sheet untuk data bank soal
+
+/**
+ * Fungsi Utama untuk Proses Upload dan Simpan Data
+ */
+function uploadUjianData(formObject) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SHEET_DATA_UJIAN);
+    const userEmail = formObject.userEmail;
+    
+    // 1. Cari atau Buat Folder Khusus Guru
+    const parentFolderId = getOrCreateTeacherFolder(userEmail);
+    
+    let idPG = "", linkPG = "", idEssay = "", linkEssay = "";
+
+    // 2. Proses & Convert File Pilihan Ganda
+    if (formObject.filePG && formObject.filePG.contents) {
+      const blobPG = Utilities.newBlob(Utilities.base64Decode(formObject.filePG.contents), formObject.filePG.mimeType, formObject.filePG.nama);
+      const resourcePG = {
+        title: "[PG] " + formObject.namaUjian + " - " + formObject.mapel,
+        mimeType: MimeType.GOOGLE_DOCS
+      };
+      // Insert file ke Drive dan otomatis Convert ke Google Docs
+      const filePG = Drive.Files.insert(resourcePG, blobPG, {uploadType: 'multipart'});
+      
+      // Pindahkan dari Root ke Folder Guru
+      const fileObjPG = DriveApp.getFileById(filePG.id);
+      DriveApp.getFolderById(parentFolderId).addFile(fileObjPG);
+      DriveApp.getRootFolder().removeFile(fileObjPG);
+      
+      idPG = filePG.id;
+      linkPG = fileObjPG.getUrl();
+    }
+    
+    // 3. Proses & Convert File Essay
+    if (formObject.fileEssay && formObject.fileEssay.contents) {
+      const blobEssay = Utilities.newBlob(Utilities.base64Decode(formObject.fileEssay.contents), formObject.fileEssay.mimeType, formObject.fileEssay.nama);
+      const resourceEssay = {
+        title: "[ESSAY] " + formObject.namaUjian + " - " + formObject.mapel,
+        mimeType: MimeType.GOOGLE_DOCS
+      };
+      // Insert file ke Drive dan otomatis Convert ke Google Docs
+      const fileEssay = Drive.Files.insert(resourceEssay, blobEssay, {uploadType: 'multipart'});
+      
+      // Pindahkan dari Root ke Folder Guru
+      const fileObjEssay = DriveApp.getFileById(fileEssay.id);
+      DriveApp.getFolderById(parentFolderId).addFile(fileObjEssay);
+      DriveApp.getRootFolder().removeFile(fileObjEssay);
+      
+      idEssay = fileEssay.id;
+      linkEssay = fileObjEssay.getUrl();
+    }
+    
+    // 4. Generate Tid (Transaction ID)
+    const tid = "UGEN-" + Utilities.formatDate(new Date(), "GMT+7", "yyyyMMdd") + "-" + Math.floor(1000 + Math.random() * 9000);
+    
+    // 5. Simpan ke Database (Sheet DATA_UJIAN)
+    sheet.appendRow([
+      tid, 
+      new Date(), 
+      userEmail, 
+      formObject.namaUjian, 
+      formObject.semester, 
+      formObject.kelas, 
+      formObject.mapel,
+      idPG,
+      linkPG,
+      idEssay,
+      linkEssay
+    ]);
+    
+    return { success: true, message: "Bank Soal berhasil dikonversi ke Google Docs dan tersimpan!" };
+    
+  } catch (err) {
+    return { success: false, message: "Gagal Proses: " + err.toString() };
+  }
+}
+
+/**
+ * Fungsi untuk Membuat Folder Guru secara Otomatis
+ */
+function getOrCreateTeacherFolder(email) {
+  const mainFolderName = "UGEN_STORAGE";
+  const teacherFolderName = "UGEN_STORAGE_" + email;
+  let mainFolder;
+  
+  // 1. Cari atau buat Folder Utama "UGEN_STORAGE"
+  const mainFolders = DriveApp.getFoldersByName(mainFolderName);
+  if (mainFolders.hasNext()) {
+    mainFolder = mainFolders.next();
+  } else {
+    mainFolder = DriveApp.createFolder(mainFolderName);
+  }
+  
+  // 2. Cari atau buat Folder khusus Guru di DALAM "UGEN_STORAGE"
+  const teacherFolders = mainFolder.getFoldersByName(teacherFolderName);
+  if (teacherFolders.hasNext()) {
+    return teacherFolders.next().getId();
+  } else {
+    const newTeacherFolder = mainFolder.createFolder(teacherFolderName);
+    return newTeacherFolder.getId();
+  }
+}
+
+/**
+ * Fungsi untuk Mengambil 10 Data Terakhir Milik Guru Tertentu
+ */
+function getTeacherRecentData(email) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(SHEET_DATA_UJIAN);
+  const allData = sheet.getDataRange().getValues();
+  
+  // Filter data berdasarkan email guru
+  let filtered = allData.filter(row => row[2] === email);
+  
+  // Ambil 10 data terakhir dan balik urutannya (terbaru di atas)
+  let recent = filtered.slice(-10).reverse();
+  
+  return recent.map(row => ({
+    tid: row[0],
+    timestamp: Utilities.formatDate(new Date(row[1]), "GMT+7", "dd/MM/yy HH:mm"),
+    namaUjian: row[3],
+    mapel: row[6],
+    linkPG: row[8],
+    linkEssay: row[10]
+  }));
+}
+
+
