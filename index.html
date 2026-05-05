@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+      body { background-color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+      .form-container { max-width: 400px; margin-top: 80px; transition: all 0.3s ease; }
+      .nav-right { position: absolute; top: 15px; right: 20px; }
+      .card { border: none; border-radius: 15px; }
+      .shadow-custom { box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+    </style>
+  </head>
+  <body>
+
+    <div class="container d-flex justify-content-center">
+  
+  <div id="loginPage" class="card shadow-custom form-container p-4 w-100">
+    <h3 class="text-center mb-4 fw-bold text-primary">Ujian Generator</h3>
+    <div id="alertPlaceholder"></div>
+    
+    <div class="mb-3">
+      <label class="form-label small fw-bold text-secondary">Email</label>
+      <input type="email" id="email" class="form-control form-control-lg" placeholder="nama@email.com">
+    </div>
+    <div class="mb-3">
+      <label class="form-label small fw-bold text-secondary">Password</label>
+      <input type="password" id="password" class="form-control form-control-lg" placeholder="Masukkan password">
+    </div>
+    <button type="button" class="btn btn-primary btn-lg w-100" onclick="handleLogin()" id="btnLogin">Masuk</button>
+    <hr class="my-4">
+    <p class="text-center mb-0 text-secondary">
+      Belum punya akun? <a href="javascript:void(0)" class="text-decoration-none fw-bold" onclick="showRegister()">Daftar di sini</a>
+    </p>
+  </div>
+
+  <div id="registerPage" class="card shadow-custom form-container p-4 d-none w-100">
+    <h3 class="text-center mb-4 fw-bold text-success">Daftar Akun</h3>
+    <div id="regAlertPlaceholder"></div>
+    
+    <div class="mb-3">
+      <label class="form-label small fw-bold text-secondary">Nama Lengkap</label>
+      <input type="text" id="regNama" class="form-control form-control-lg" placeholder="Nama sesuai identitas">
+    </div>
+    <div class="mb-3">
+      <label class="form-label small fw-bold text-secondary">Email</label>
+      <input type="email" id="regEmail" class="form-control form-control-lg" placeholder="nama@email.com">
+    </div>
+    <button type="button" class="btn btn-success btn-lg w-100" onclick="handleRegister()" id="btnReg">Kirim Pendaftaran</button>
+    <hr class="my-4">
+    <p class="text-center mb-0 text-secondary">
+      Sudah punya akun? <a href="javascript:void(0)" class="text-decoration-none fw-bold" onclick="showLogin()">Kembali ke Login</a>
+    </p>
+  </div>
+
+  <div id="dashboardPage" class="mt-5 text-center d-none w-100" style="max-width: 900px;">
+    <div class="nav-right" id="userMenu">
+      <span id="userNameDisplay" class="me-3 fw-bold text-dark text-uppercase small"></span>
+      <button type="button" class="btn btn-outline-danger btn-sm rounded-pill px-3" onclick="logout()">Log Out</button>
+    </div>
+    
+    <div class="card p-4 shadow-custom bg-white">
+      <h1 id="welcomeMessage" class="fw-bold text-dark mt-3"></h1>
+      <p class="text-muted fs-5">Selamat datang di sistem manajemen ujian.</p>
+      <hr class="my-4">
+      
+      <div id="adminContent" class="d-none">
+        <div class="d-flex justify-content-between align-items-center mb-3 text-start">
+          <h5 class="fw-bold text-primary mb-0">Panel Aktivasi User</h5>
+          <button type="button" class="btn btn-outline-success btn-sm d-flex align-items-center" onclick="openSpreadsheet()">
+            <img src="https://cdn-icons-png.flaticon.com/512/2965/2965327.png" width="18" class="me-2">
+            Buka Database Master
+          </button>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-hover align-middle bg-white rounded border">
+            <thead class="table-light">
+              <tr>
+                <th class="text-start">Nama</th>
+                <th class="text-start">Email</th>
+                <th width="200">Set Password</th>
+                <th width="100">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="userTableBody">
+              </tbody>
+          </table>
+        </div>
+        <div class="text-start">
+          <button class="btn btn-sm btn-light border" onclick="loadPendingUsers()">
+            <span class="spinner-border spinner-border-sm d-none" id="refreshLoader"></span> 🔄 Segarkan Data
+          </button>
+        </div>
+      </div>
+
+      <div id="userContent" class="d-none">
+        <div class="alert alert-success border-0 shadow-sm">
+          <p class="mb-0">Silakan pilih menu ujian yang tersedia di bawah ini untuk memulai.</p>
+        </div>
+        <div class="py-5">
+          <h4 class="text-muted small text-uppercase">-- Belum ada ujian aktif --</h4>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+    <script>
+      // --- Navigasi Tampilan ---
+      function showRegister() {
+        document.getElementById('loginPage').classList.add('d-none');
+        document.getElementById('registerPage').classList.remove('d-none');
+        document.getElementById('regAlertPlaceholder').innerHTML = ""; // Bersihkan alert lama
+      }
+
+      function showLogin() {
+        document.getElementById('registerPage').classList.add('d-none');
+        document.getElementById('loginPage').classList.remove('d-none');
+        document.getElementById('alertPlaceholder').innerHTML = ""; // Bersihkan alert lama
+      }
+
+      // --- Fungsi Login ---
+      function handleLogin() {
+        const email = document.getElementById('email').value;
+        const pass = document.getElementById('password').value;
+        const btn = document.getElementById('btnLogin');
+
+        if(!email || !pass) return alert("Email dan Password tidak boleh kosong!");
+
+        btn.disabled = true;
+        btn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Verifikasi...`;
+
+        google.script.run.withSuccessHandler(function(response) {
+          btn.disabled = false;
+          btn.innerHTML = "Masuk";
+
+          if(response.success) {
+            showDashboard(response);
+          } else {
+            document.getElementById('alertPlaceholder').innerHTML = 
+              `<div class="alert alert-danger py-2 small">${response.message}</div>`;
+          }
+        }).processLogin(email, pass);
+      }
+
+      // --- Fungsi Registrasi ---
+      function handleRegister() {
+        const nama = document.getElementById('regNama').value;
+        const email = document.getElementById('regEmail').value;
+        const btn = document.getElementById('btnReg');
+
+        if(!nama || !email) return alert("Nama dan Email wajib diisi!");
+
+        btn.disabled = true;
+        btn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Mengirim...`;
+
+        google.script.run.withSuccessHandler(function(response) {
+          btn.disabled = false;
+          btn.innerHTML = "Kirim Pendaftaran";
+
+          if(response.success) {
+            alert(response.message);
+            showLogin();
+          } else {
+            document.getElementById('regAlertPlaceholder').innerHTML = 
+              `<div class="alert alert-danger py-2 small">${response.message}</div>`;
+          }
+        }).processRegistration(nama, email);
+      }
+
+      // --- Tampilan Setelah Login ---
+      function showDashboard(data) {
+        document.getElementById('loginPage').classList.add('d-none');
+        document.getElementById('registerPage').classList.add('d-none');
+        document.getElementById('dashboardPage').classList.remove('d-none');
+        
+        document.getElementById('userNameDisplay').innerText = data.nama;
+        document.getElementById('welcomeMessage').innerText = `Halo, ${data.nama}!`;
+        
+        // Cek Role
+        if(data.role === "admin") {
+          document.getElementById('adminContent').classList.remove('d-none');
+        } else {
+          document.getElementById('userContent').classList.remove('d-none');
+        }
+      }
+
+      function logout() {
+        // 1. Sembunyikan Dashboard
+        document.getElementById('dashboardPage').classList.add('d-none');
+        
+        // 2. Munculkan kembali halaman Login
+        document.getElementById('loginPage').classList.remove('d-none');
+        
+        // 3. Kosongkan input email dan password agar tidak tertinggal
+        document.getElementById('email').value = "";
+        document.getElementById('password').value = "";
+        
+        // 4. Bersihkan pesan error atau alert jika ada
+        document.getElementById('alertPlaceholder').innerHTML = "";
+        
+        // 5. Sembunyikan konten khusus admin/user agar reset total
+        document.getElementById('adminContent').classList.add('d-none');
+        document.getElementById('userContent').classList.add('d-none');
+        
+        console.log("User has logged out.");
+      }
+
+
+      // --- Fungsi UNTUK HALAMAN ADMIN ---
+      // Fungsi untuk memuat data user pending dari server
+      function loadPendingUsers() {
+        const loader = document.getElementById('refreshLoader');
+        const tbody = document.getElementById('userTableBody');
+        
+        loader.classList.remove('d-none');
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Memuat data...</td></tr>';
+
+        google.script.run.withSuccessHandler(function(users) {
+          loader.classList.add('d-none');
+          tbody.innerHTML = "";
+          
+          if (users.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Tidak ada user yang menunggu.</td></tr>';
+            return;
+          }
+
+          users.forEach(user => {
+            tbody.innerHTML += `
+              <tr>
+                <td>${user.nama}</td>
+                <td>${user.email}</td>
+                <td>
+                  <input type="text" id="pass_${user.row}" class="form-control form-control-sm" placeholder="Isi password">
+                </td>
+                <td>
+                  <button class="btn btn-success btn-sm" onclick="handleApprove(${user.row})">Aktifkan</button>
+                </td>
+              </tr>
+            `;
+          });
+        }).getPendingUsers();
+      }
+
+      // Fungsi untuk mengirim data aktivasi ke server
+      function handleApprove(row) {
+        const password = document.getElementById(`pass_${row}`).value;
+        if (!password) return alert("Password harus diisi!");
+
+        if (!confirm("Aktifkan user ini?")) return;
+
+        google.script.run.withSuccessHandler(function(response) {
+          alert(response.message);
+          loadPendingUsers(); // Refresh tabel setelah sukses
+        }).approveUser(row, password);
+      }
+
+      // Tambahkan pemanggilan loadPendingUsers di dalam fungsi showDashboard
+      // Cari fungsi showDashboard(data) yang sudah ada, lalu tambahkan baris ini:
+      function showDashboard(data) {
+        try {
+          // 1. Sembunyikan semua halaman form
+          document.getElementById('loginPage').classList.add('d-none');
+          document.getElementById('registerPage').classList.add('d-none');
+          
+          // 2. Tampilkan halaman dashboard
+          document.getElementById('dashboardPage').classList.remove('d-none');
+          
+          // 3. Isi data user
+          document.getElementById('userNameDisplay').innerText = data.nama || "User";
+          document.getElementById('welcomeMessage').innerText = `Halo, ${data.nama || "User"}!`;
+          
+          // 4. Logika Role
+          // Pastikan ID 'adminContent' dan 'userContent' ada di HTML Anda
+          if (data.role === "admin") {
+            const adminDiv = document.getElementById('adminContent');
+            if (adminDiv) {
+              adminDiv.classList.remove('d-none');
+              loadPendingUsers(); // Memanggil fungsi ambil data user pending
+            }
+          } else {
+            const userDiv = document.getElementById('userContent');
+            if (userDiv) {
+              userDiv.classList.remove('d-none');
+            }
+          }
+        } catch (err) {
+          console.error("Error di showDashboard:", err);
+          alert("Terjadi kesalahan saat memuat dashboard: " + err.message);
+        }
+      }
+
+      function openSpreadsheet() {
+        // Kita panggil fungsi di code.gs untuk mendapatkan URL Spreadsheet
+        google.script.run.withSuccessHandler(function(url) {
+          if (url) {
+            window.open(url, '_blank'); // Membuka spreadsheet di tab baru
+          } else {
+            alert("Gagal mengambil URL Spreadsheet.");
+          }
+        }).getSpreadsheetUrl();
+      }
+    </script>
+  </body>
+</html>
